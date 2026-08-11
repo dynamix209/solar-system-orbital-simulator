@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Solar System Simulator</title>
+<meta name="description" content="Interactive 3D solar system simulator with real Keplerian orbits, NASA data, moons, and surface views.">
+<meta name="author" content="Pakistan">
+<meta name="version" content="1.4-webgl">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="loading-screen" onclick="this.classList.add('force-off');this.style.display='none';" title="Click to enter">
+  <img id="loading-logo"
+       src="https://ncgsa.org.pk/wp-content/uploads/2023/05/NCGSA-logo-HD-white-01-3-300x80.png"
+       alt="Logo"
+       width="300" height="80"
+       onerror="this.style.display='none';" />
+  <p id="loading-mark"><span>Solar System Simulator</span></p>
+  <p style="font-size:11px;color:#9aa3b0;letter-spacing:0.08em;margin-top:8px;">Preparing 3D view…</p>
+  <p id="loading-sub">Click anywhere to enter</p>
+  <div id="loading-track"><div id="loading-fill" style="width:40%"></div></div>
+  <p id="loading-file">Almost ready… (v1.4)</p>
+</div>
+
+
+<div id="texture-status" aria-live="polite"></div>
+<div id="loading-credit">Imagery: Solar System Scope · NASA 3D Resources · three.js maps (CC BY 4.0)</div>
+
+<div id="scene-wrap"></div>
+<div id="labels-layer"></div>
+
+<div id="topbar">
+  <div id="topbar-left">
+    <a href="https://ncgsa.org.pk/" target="_blank" rel="noopener noreferrer" title="Home">
+      <img id="ncgsa-logo"
+           src="https://ncgsa.org.pk/wp-content/uploads/2023/05/NCGSA-logo-HD-white-01-3-300x80.png"
+           alt="Logo"
+           width="160" height="42"
+           onerror="this.onerror=null;this.src='https://ncgsa.org.pk/wp-content/uploads/2025/09/cropped-android-chrome-512x512-1-192x192.png';this.style.height='40px';this.style.width='40px';" />
+    </a>
+    <div id="title-block">
+      <p class="eyebrow">Real orbits · real imagery · real data</p>
+      <h1><span>Solar System Simulator</span></h1>
+      <p id="scale-note">Real Keplerian orbits · real-time · sizes near-linear (soft-compressed) · fresnel atmospheres</p>
+    </div>
+  </div>
+  <div id="simdate">
+    <span class="lab">Simulated date</span>
+    <span id="simdate-value">—</span>
+  </div>
+</div>
+
+<div id="chips"></div>
+
+<aside id="constellation-panel">
+  <div class="cp-head">
+    <h3>Constellations</h3>
+    <button type="button" class="cp-toggle" id="cp-toggle" title="Collapse">Hide</button>
+  </div>
+  <div id="constellation-list"></div>
+</aside>
+
+<div id="hint">drag to orbit · scroll to zoom · click a planet, moon, or constellation</div>
+<div id="data-credit">Data: NASA / JPL · Orbits: J2000 Keplerian elements · Textures: Solar System Scope (CC BY 4.0) & NASA</div>
+
+<div id="dock">
+  <button id="playbtn" title="Play / Pause">
+    <svg id="icon-pause" width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="1" width="3" height="10" fill="currentColor"/><rect x="8" y="1" width="3" height="10" fill="currentColor"/></svg>
+    <svg id="icon-play" width="12" height="12" viewBox="0 0 12 12" fill="none" style="display:none;"><path d="M2 1L11 6L2 11V1Z" fill="currentColor"/></svg>
+  </button>
+  <div class="dock-divider"></div>
+  <div id="speed-row">
+    <label>Simulation speed</label>
+    <input type="range" id="speedRange" min="0" max="60" step="0.1" value="0">
+    <span id="speedVal">1x real-time</span>
+  </div>
+  <div class="dock-divider"></div>
+  <button id="todaybtn">Jump to today</button>
+  <div class="dock-divider"></div>
+  <button id="homebtn" title="Return to full system view">Full system</button>
+  <div class="dock-divider"></div>
+  <button id="inclbtn" title="Show / hide orbital inclination markers" class="active">Inclination ON</button>
+  <button id="fullscreenbtn" title="Toggle fullscreen">
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M1 5.5V1.5C1 1.22 1.22 1 1.5 1H5.5M14.5 1H10.5M15 1V5.5M15 10.5V14.5C15 14.78 14.78 15 14.5 15H10.5M5.5 15H1.5C1.22 15 1 14.78 1 14.5V10.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+  </button>
+</div>
+<div id="incl-legend" style="position:fixed;bottom:72px;left:16px;z-index:40;background:rgba(10,14,22,0.82);border:1px solid rgba(201,162,39,0.35);border-radius:8px;padding:10px 14px;font-size:11px;color:#c8d0dc;max-width:260px;line-height:1.45;backdrop-filter:blur(8px);display:none;">
+  <strong style="color:#c9a227;">Orbital inclination</strong><br>
+  Planet orbit lines are tilted relative to the <em>ecliptic</em> (Earth’s orbital plane, i = 0°).<br>
+  • Warm / redder lines = higher tilt (e.g. Mercury ~7°)<br>
+  • Cool / brass lines = nearly flat (Earth ~0°)<br>
+  • Vertical ticks mark the tilt angle from the ecliptic plane.<br>
+  <span style="opacity:0.75">Toggle with “Inclination ON/OFF” in the dock.</span>
+</div>
+
+<div id="hud">
+  <button id="hud-close" title="Hide panel and keep observing this body">Hide panel</button>
+  <button id="hud-exit" title="Return to full solar system view" style="position:absolute;top:16px;right:110px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);background:none;border:none;cursor:pointer;padding:4px 6px;">Full system</button>
+  <p class="type-eyebrow" id="hud-type"></p>
+  <h2 id="hud-name"></h2>
+  <p class="subtitle" id="hud-subtitle"></p>
+
+  <div class="stat-row"><span class="stat-label">Diameter</span><span class="stat-value" id="hud-diameter"></span></div>
+  <div class="stat-row"><span class="stat-label">Orbital period</span><span class="stat-value" id="hud-period"></span></div>
+  <div class="stat-row" id="hud-incl-row"><span class="stat-label">Inclination</span><span class="stat-value" id="hud-incl"></span></div>
+  <div class="stat-row"><span class="stat-label" id="hud-distance-label">Distance from Sun (now)</span><span class="stat-value" id="hud-distance"></span></div>
+  <div class="stat-row"><span class="stat-label" id="hud-ptype-label">Planet type</span><span class="stat-value" id="hud-ptype"></span></div>
+  <div class="stat-row" id="hud-moons-row"><span class="stat-label">Moons</span><span class="stat-value" id="hud-moons"></span></div>
+  <div id="hud-moon-list" style="display:none;margin:8px 0 4px;max-height:140px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;padding:6px 8px;"></div>
+  <button id="hud-moon-visit" style="display:none;width:100%;margin:6px 0 4px;padding:8px 10px;border-radius:8px;border:1px solid var(--brass-dim);background:rgba(201,162,39,0.12);color:var(--brass);font-family:JetBrains Mono,monospace;font-size:10px;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;">Visit surface</button>
+  <div class="stat-row" id="hud-gravity-row"><span class="stat-label">Surface gravity</span><span class="stat-value" id="hud-gravity"></span></div>
+  <div class="stat-row" id="hud-temp-row"><span class="stat-label">Mean temperature</span><span class="stat-value" id="hud-temp"></span></div>
+  <div class="stat-row" id="hud-density-row"><span class="stat-label">Density</span><span class="stat-value" id="hud-density"></span></div>
+  <div class="stat-row" id="hud-escape-row"><span class="stat-label">Escape velocity</span><span class="stat-value" id="hud-escape"></span></div>
+  <div class="stat-row" id="hud-atmo-row" style="display:none"><span class="stat-label">Atmosphere</span><span class="stat-value" id="hud-atmo"></span></div>
+  <div class="stat-row" id="hud-surface-row" style="display:none"><span class="stat-label">Surface</span><span class="stat-value" id="hud-surface"></span></div>
+  <div class="stat-row" id="hud-mag-row" style="display:none"><span class="stat-label">Magnetic field</span><span class="stat-value" id="hud-mag"></span></div>
+
+  <div class="block live" id="hud-live-block">
+    <p class="vh"><span>Sky reference: Islamabad, Pakistan</span><span id="hud-live-date"></span></p>
+    <div id="hud-live-content"></div>
+  </div>
+
+  <div class="block" id="hud-vis-block">
+    <p class="vh">General visibility character</p>
+    <p id="hud-visibility"></p>
+  </div>
+  <p class="disclaimer" id="hud-disclaimer">Positions and rise/set windows are computed from real orbital elements and approximate rise/set formulas (~arc-minute accuracy) — good for planning a session, not a substitute for a precise almanac.</p>
+
+</div>
+
+<div id="teleport-veil"></div>
+
+<div id="surface-wrap"></div>
+
+<div id="surface-topbar">
+  <div id="surface-title-block">
+    <p class="eyebrow" id="surface-eyebrow">Surface observation</p>
+    <h1 id="surface-h1">—</h1>
+  </div>
+  <div style="display:flex; align-items:center;">
+    <button id="nightsky-btn" title="Toggle the real night sky for this world">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M10.5 6.8A4.6 4.6 0 1 1 5.2 1.5a3.7 3.7 0 0 0 5.3 5.3Z" fill="currentColor"/></svg>
+      <span>Night sky</span>
+    </button>
+    <button id="return-btn">
+      <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M9.5 5.5H1.5M1.5 5.5L4.5 2.5M1.5 5.5L4.5 8.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Return to orrery</span>
+    </button>
+  </div>
+</div>
+
+<div id="surface-hint">drag to look 360° · scroll to zoom</div>
+
+<div id="nightsky-panel">
+  <p class="type-eyebrow">Night sky</p>
+  <p id="nightsky-sub"></p>
+  <div class="nightsky-block">
+    <h4>Solar system objects visible</h4>
+    <div id="nightsky-planets"></div>
+  </div>
+  <div class="nightsky-block">
+    <h4>Constellations overhead</h4>
+    <div id="nightsky-constellations"></div>
+  </div>
+  <p class="nightsky-note" id="nightsky-note"></p>
+</div>
+
+<div id="atmo-panel">
+  <p class="type-eyebrow">Atmospheric composition</p>
+  <p id="atmo-pressure" class="atmo-pressure"></p>
+  <div id="atmo-bars"></div>
+  <p id="atmo-note" class="atmo-note"></p>
+  <div id="atmo-swatch-row">
+    <span class="atmo-swatch-lab">Derived sky tone</span>
+    <span id="atmo-swatch"></span>
+    <span id="atmo-hex" class="atmo-hex"></span>
+  </div>
+</div>
+
+<div id="teleport-caption"></div>
+
+
+  <script src="script.js"></script>
+</body>
+</html>
